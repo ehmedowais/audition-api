@@ -4,9 +4,26 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  main:
+    allow-bean-definition-overriding: true
 application:
   connection:
     read-timeout: 5000
     write-timeout: 5000
     connect-timeout: 5000
     response-timeout: 5000
+
+logging:
+  level:
+    com.audition: DEBUG
+    org.springframework.web.client: DEBUG
+
+jsonplaceholder:
+  api:
+    url: https://jsonplaceholder.typicode.com
+
+# RestTemplate timeout configuration
+rest:
+  template:
+    connect-timeout: 2000
+    read-timeout: 2000

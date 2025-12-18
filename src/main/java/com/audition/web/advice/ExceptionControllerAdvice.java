@@ -6,6 +6,7 @@ import static org.springframework.http.HttpStatus.METHOD_NOT_ALLOWED;
 import com.audition.common.exception.SystemException;
 import com.audition.common.logging.AuditionLogger;
 import io.micrometer.common.util.StringUtils;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,12 +23,13 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class ExceptionControllerAdvice extends ResponseEntityExceptionHandler {
 
     public static final String DEFAULT_TITLE = "API Error Occurred";
+    public static final String BAD_REQUEST_TITLE = "Bad Request";
     private static final Logger LOG = LoggerFactory.getLogger(ExceptionControllerAdvice.class);
     private static final String ERROR_MESSAGE = " Error Code from Exception could not be mapped to a valid HttpStatus Code - ";
     private static final String DEFAULT_MESSAGE = "API Error occurred. Please contact support or administrator.";
 
     @Autowired
-    private AuditionLogger logger;
+    private transient AuditionLogger logger;
 
     @ExceptionHandler(HttpClientErrorException.class)
     ProblemDetail handleHttpClientException(final HttpClientErrorException e) {
@@ -44,6 +46,7 @@ public class ExceptionControllerAdvice extends ResponseEntityExceptionHandler {
 
     }
 
+
     @ExceptionHandler(SystemException.class)
     ProblemDetail handleSystemException(final SystemException e) {
         // TODO `Add Handling for SystemException
@@ -59,6 +62,8 @@ public class ExceptionControllerAdvice extends ResponseEntityExceptionHandler {
         problemDetail.setDetail(getMessageFromException(exception));
         if (exception instanceof SystemException) {
             problemDetail.setTitle(((SystemException) exception).getTitle());
+        } else if (exception instanceof ConstraintViolationException) {
+            problemDetail.setTitle(BAD_REQUEST_TITLE);
         } else {
             problemDetail.setTitle(DEFAULT_TITLE);
         }
@@ -73,8 +78,13 @@ public class ExceptionControllerAdvice extends ResponseEntityExceptionHandler {
     }
 
     private HttpStatusCode getHttpStatusCodeFromSystemException(final SystemException exception) {
+        int maxValidHttpStatusCode = 599;
         try {
-            return HttpStatusCode.valueOf(exception.getStatusCode());
+            if (exception.getStatusCode() <= maxValidHttpStatusCode) {
+                return HttpStatusCode.valueOf(exception.getStatusCode());
+            } else {
+                return HttpStatusCode.valueOf(500);
+            }
         } catch (final IllegalArgumentException iae) {
             logger.info(LOG, ERROR_MESSAGE + exception.getStatusCode());
             return INTERNAL_SERVER_ERROR;

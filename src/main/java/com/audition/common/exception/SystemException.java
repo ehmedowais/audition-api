@@ -8,6 +8,8 @@ public class SystemException extends RuntimeException {
     private static final long serialVersionUID = -5876728854007114881L;
 
     public static final String DEFAULT_TITLE = "API Error Occurred";
+    public static final String NOT_FOUND_ERROR_TITLE = "Resource Not Found";
+    public static final String BAD_REQUEST_ERROR_TITLE = "Bad Request";
     private Integer statusCode;
     private String title;
     private String detail;
@@ -53,7 +55,8 @@ public class SystemException extends RuntimeException {
         this.detail = detail;
     }
 
-    public SystemException(final String detail, final String title, final Integer errorCode, final Throwable exception) {
+    public SystemException(final String detail, final String title, final Integer errorCode,
+        final Throwable exception) {
         super(detail, exception);
         this.statusCode = errorCode;
         this.title = title;

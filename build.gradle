@@ -4,11 +4,12 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.0'
     id "maven-publish"
     id 'jacoco'
-    id "com.github.spotbugs" version "5.0.14"
+    id "com.github.spotbugs" version "6.0.8"
     id "io.freefair.lombok" version "8.0.1"
     // TODO Enable checkstyle and PMD. Fix all the relevant issues.
-    //id "checkstyle"
-    //id "pmd"
+    id "checkstyle"
+    id "pmd"
+
 }
 
 group = 'com.audition'
@@ -35,6 +36,7 @@ ext {
     set('logbackVersion', "1.4.5")
     set('slf4jVersion', "2.0.5")
     set('springdocVersion', "2.0.2")
+
 }
 
 dependencies {
@@ -53,7 +55,7 @@ dependencies {
     implementation "org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j"
     implementation "org.springframework.cloud:spring-cloud-starter-config"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
-
+    implementation 'io.opentelemetry:opentelemetry-api'
     developmentOnly "org.springframework.boot:spring-boot-devtools"
     runtimeOnly "io.micrometer:micrometer-registry-prometheus"
 
@@ -61,9 +63,18 @@ dependencies {
     implementation "org.slf4j:slf4j-api:${slf4jVersion}"
     implementation "ch.qos.logback:logback-core:${logbackVersion}"
     implementation "ch.qos.logback:logback-classic:${logbackVersion}"
-
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
     testImplementation "org.springframework.boot:spring-boot-starter-test"
     testImplementation "io.projectreactor:reactor-test"
+    testImplementation 'org.wiremock:wiremock-standalone:3.3.1'
+    testImplementation 'io.opentelemetry:opentelemetry-api:1.38.0'
+    testImplementation 'org.mockito:mockito-core:5.2.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.2.0'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
+    testImplementation 'org.springframework:spring-test:6.1.10'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    compileOnly "com.github.spotbugs:spotbugs-annotations:4.8.6"
 }
 
 dependencyManagement {
@@ -83,4 +94,31 @@ tasks.matching { it.name != 'prepareGitHooks' }.all { Task task -> task.dependsO
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+tasks.withType(Checkstyle).configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+tasks.named('bootRun') {
+    jvmArgs = [
+            "-javaagent:${projectDir}/opentelemetry-javaagent.jar",
+            "-Dotel.service.name=otelcol",
+            "-Dotel.traces.exporter=otlp",
+            "-Dotel.metrics.exporter=none",
+            "-Dotel.exporter.otlp.endpoint=http://localhost:4318"
+    ]
+}
+
+checkstyle {
+    toolVersion = '10.12.1'
+    configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
+
+    // Provide the properties that the XML is looking for
+    configProperties = [
+            'org.checkstyle.google.suppressionfilter.config'     : "${project.rootDir}/config/checkstyle/suppressions.xml",
+            'org.checkstyle.google.suppressionxpathfilter.config': "${project.rootDir}/config/checkstyle/xpath-suppressions.xml"
+    ]
 }
