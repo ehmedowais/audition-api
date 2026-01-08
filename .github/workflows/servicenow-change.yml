@@ -1,0 +1,79 @@
+name: Build, Change Request, and Deploy
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches:
+      - master
+
+jobs:
+  build-and-create-cr:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      change_number: ${{ steps.create-cr.outputs.change_number }}
+      change_sysid: ${{ steps.create-cr.outputs.change_sysid }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Build
+        run: npm run build
+
+      - name: Create Change Request
+        id: create-cr
+        run: |
+          # Create CR and capture outputs
+          # (Use previous script)
+          echo "change_number=$CHANGE_NUMBER" >> $GITHUB_OUTPUT
+          echo "change_sysid=$CHANGE_SYSID" >> $GITHUB_OUTPUT
+
+  wait-for-approval:
+    needs: build-and-create-cr
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll ServiceNow for Approval
+        env:
+          SNOW_INSTANCE: ${{ secrets.SERVICENOW_INSTANCE }}
+          SNOW_USERNAME: ${{ secrets.SERVICENOW_USERNAME }}
+          SNOW_PASSWORD: ${{ secrets.SERVICENOW_PASSWORD }}
+          CHANGE_SYSID: ${{ needs.build-and-create-cr.outputs.change_sysid }}
+        run: |
+          MAX_ATTEMPTS=60  # 60 attempts = 1 hour with 1min sleep
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            RESPONSE=$(curl -s -X GET \
+              "https://${SNOW_INSTANCE}.service-now.com/api/now/table/change_request/${CHANGE_SYSID}?sysparm_fields=state,approval" \
+              -H "Accept: application/json" \
+              -u "${SNOW_USERNAME}:${SNOW_PASSWORD}")
+          
+            STATE=$(echo $RESPONSE | jq -r '.result.state')
+            APPROVAL=$(echo $RESPONSE | jq -r '.result.approval')
+          
+            echo "Attempt $((ATTEMPT+1))/$MAX_ATTEMPTS - State: $STATE, Approval: $APPROVAL"
+          
+            if [ "$APPROVAL" == "approved" ]; then
+              echo "✅ Change Request Approved!"
+              exit 0
+            elif [ "$APPROVAL" == "rejected" ]; then
+              echo "❌ Change Request Rejected"
+              exit 1
+            fi
+          
+            sleep 60  # Wait 1 minute
+            ATTEMPT=$((ATTEMPT+1))
+          done
+          
+          echo "⏱️ Timeout waiting for approval"
+          exit 1
+
+  deploy-to-staging:
+    needs: wait-for-approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Staging
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          # Add your deployment commands here
